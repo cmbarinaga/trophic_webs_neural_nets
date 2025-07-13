@@ -2,7 +2,7 @@ import igraph as ig
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.optimize import curve_fit 
+from scipy.optimize import curve_fit
 import random
 import torch
 import torch.nn.functional as F
@@ -97,13 +97,61 @@ def extinction_simulation(g, type_ = "top", metric = "ksi", percent = 10, specie
 
 
 
+# Calculate node "flow" using a simple Infomap-inspired random walk
+def infomap_flow_indexer(g, damping=0.85, max_iter=100, tol=1e-6):
+    """Assign a flow value to each vertex based on a random walk.
+
+    The function first runs Infomap to ensure compatibility with the
+    network structure and then estimates the stationary distribution of
+    a random walker. The resulting probabilities are stored in the
+    vertex attribute ``flow`` and returned as a list.
+    """
+
+    # Handle empty graphs gracefully
+    n = g.vcount()
+    if n == 0:
+        g.vs["flow"] = []
+        return []
+
+    # Run infomap clustering (membership not used directly)
+    try:
+        g.community_infomap()
+    except Exception:
+        pass
+
+    adj = np.array(g.get_adjacency().data, dtype=float)
+    if adj.ndim == 1:
+        adj = adj.reshape(n, n)
+    row_sums = adj.sum(axis=1)
+
+    # Transition matrix for random walk
+    P = np.zeros((n, n))
+    for i in range(n):
+        if row_sums[i] > 0:
+            P[i] = adj[i] / row_sums[i]
+        else:
+            P[i] = np.ones(n) / n
+
+    flow = np.ones(n) / n
+    for _ in range(max_iter):
+        new_flow = damping * flow.dot(P) + (1 - damping) / n
+        if np.linalg.norm(new_flow - flow, ord=1) < tol:
+            flow = new_flow
+            break
+        flow = new_flow
+
+    g.vs["flow"] = list(flow)
+    return list(flow)
+
+
 #sets the KSI values for each species; internal methods can be changed to add more metrics
-#currently uses degree, pagerank, and betweenness
+#currently uses degree, flow, and betweenness
 def ksi_indexer(g):
 
     ksi = [0] * g.vcount()
 
-    methods = [g.vs.degree, g.vs.pagerank, g.vs.betweenness]
+    flow = infomap_flow_indexer(g)
+    methods = [g.vs.degree, lambda: flow, g.vs.betweenness]
 
     #Find basal and apex indices
     basal_indices = [i.index for i in g.vs if g.degree(i.index, mode = "in") == 0 and g.degree(i.index, mode = "out") > 0]
