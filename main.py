@@ -125,6 +125,11 @@ comparison = {
     "Arctic": {}
 }
 
+robustness_results = {
+    "Antarctica": {},
+    "Arctic": {}
+}
+
 
 #Static Network-wide comparisons
 
@@ -346,633 +351,344 @@ compare_and_color_modules(arctic, "arctic")
 # KSI/Trophic level recomputed each iteration, taking into account new extinctions
 #In each newly evaluated iteration, the species that fits the criteria top/bottom/median for ksi/trophic is extinguished
 figure_count = 1
-threshold = 0.5 #threshold for extinction, passed to extinction functions
-types = ["top", "bottom", "median"]
+thresholds = [0.25, 0.5, 0.75]
 metrics = ["ksi", "trophic_level"]
 
-for type_ in types:
+for threshold in thresholds:
     for metric in metrics:
+        if metric == "ksi":
+            types = ["top", "bottom"]
+        else:
+            types = ["top", "median"]
 
-        #Antarctica
-        antarctica_collapse = 0 #initializing collapse point
-        temp_g = antarctica.copy()
-        antarctica_x = list(range(antarctica.vcount()))
-        antarctica_y = []
-        max_delta = 0 #to track the max delta between points
-
-        #All species KSI for each extinction
-        by_species_antarctica = {}
-        for name in antarctica.vs["name"]:
-            by_species_antarctica[name] = []
-
-        #Ordered list of what animals are being extinguished under each iteration
-        antarctica_pop_list = []
-
-        for i in antarctica_x:
-            #Updating KSI values
-            trophic_level_indexer(temp_g)
-            ksi_indexer(temp_g)
-            for j in range(temp_g.vcount()):
-                by_species_antarctica[temp_g.vs[j]["name"]].append(temp_g.vs[j]["ksi"])
-
-
-            #Checking if collapsed
-            components = temp_g.components(mode="weak")
-            if len(components) > 1 and antarctica_collapse == 0 and all(x > 1 for x in sorted(components.sizes(), reverse=True)[0:2]):
-                antarctica_collapse = i
-            
-            #Adding the current population to the y axis
-            antarctica_y.append(temp_g.vcount())
-
-            #Tracking largest delta between points
-            if len(antarctica_y) > 1:
-                antarctica_pop_list.append(popped)
-                if antarctica_y[-2] - antarctica_y[-1] > max_delta:
-                    antarctica_mark = (popped, i - 1) #does this record the right point idk
-                    max_delta = antarctica_y[-2] - antarctica_y[-1]
-
-            #Dynamic extinction simulation
-            temp_g, popped = extinction_simulation(temp_g, type_ = type_, metric=metric, percent=0, threshold=threshold)
-            
-        antarctica_pop_list.append("END")
-        antarctica_x = [x / antarctica.vcount() * 100 for x in antarctica_x]
-        antarctica_y = [y / antarctica.vcount() * 100 for y in antarctica_y]
-
-
-
-        #Arctic
-        max_delta = 0 
-        arctic_collapse = 0
-        temp_g = arctic.copy()
-        arctic_x = list(range(arctic.vcount()))
-        arctic_y = []
-        
-        by_species_arctic = {}
-        for name in arctic.vs["name"]:
-            by_species_arctic[name] = []
-
-        arctic_pop_list = []
-
-        for i in arctic_x:
-
-            ksi_indexer(temp_g)
-            trophic_level_indexer(temp_g)
-            for j in range(temp_g.vcount()):
-                by_species_arctic[temp_g.vs[j]["name"]].append(temp_g.vs[j]["ksi"])
-
-
-            components = temp_g.components(mode="weak")
-            if len(components) > 1 and arctic_collapse == 0 and all(x > 1 for x in sorted(components.sizes(), reverse=True)[0:2]):
-                arctic_collapse = i
-            arctic_y.append(temp_g.vcount())
-
-            if len(arctic_y) > 1:
-                arctic_pop_list.append(popped)
-                if arctic_y[-2] - arctic_y[-1] > max_delta:
-                    max_delta = arctic_y[-2] - arctic_y[-1]
-                    arctic_mark = (popped, i - 1) #does this record the right point idk
-                    
-
-            temp_g, popped = extinction_simulation(temp_g, type_ = type_, metric=metric, percent=0, threshold = threshold)
-
-        arctic_x = [x / arctic.vcount() * 100 for x in arctic_x]
-        arctic_y = [y / arctic.vcount() * 100 for y in arctic_y]
-
-        arctic_pop_list.append("END")
-
-
-        #Plotting the results
-        fig, ax1 = plt.subplots()
-        plt.subplots_adjust(bottom=0.25, right = 0.725)
-
-        pop_plot_objects = []
-
-        #Baseline y = 100 - x reference line
-        pop_plot_objects.append(ax1.plot([0, max(antarctica_x)], [max(antarctica_y), 0], label="Reference", color="gray", linewidth = 1, linestyle = "--", alpha = 0.5)[0])  # Line plot for y1
-        
-        #Points at which max population delta occurs
-        pop_plot_objects.append(ax1.scatter(arctic_x[arctic_mark[1]], arctic_y[arctic_mark[1]], label = arctic_mark[0], color = ARCTIC_COLOR, s = 100))
-        pop_plot_objects.append(ax1.scatter(antarctica_x[antarctica_mark[1]], antarctica_y[antarctica_mark[1]], label = antarctica_mark[0], color = ANTARCTICA_COLOR, s = 100))
-
-        #Plotting the extinction lines
-        pop_plot_objects.append(ax1.plot(antarctica_x, antarctica_y, label="Antarctic Extinction", color=ANTARCTICA_COLOR, linewidth = 4)[0])  # Line plot for y1
-        if antarctica_collapse != 0:
-            pop_plot_objects.append(ax1.axhline(antarctica_y[antarctica_collapse], color=ANTARCTICA_COLOR, linestyle='dotted', linewidth=2, label="Antarctic Collapse"))
-
-        pop_plot_objects.append(ax1.plot(arctic_x, arctic_y, label="Arctic Extinction", color=ARCTIC_COLOR, linewidth = 4)[0])  # Line plot for y2
-        if arctic_collapse != 0:
-            pop_plot_objects.append(ax1.axhline(arctic_y[arctic_collapse], color=ARCTIC_COLOR, linestyle='dotted', linewidth=2, label="Arctic Collapse"))
-        #Darker Colors:
-        #Arctic: #0f8aa6
-        #Antarctica: #020ca1
-
-        #Controlling transparency of plots of population
-
-        # Add a slider for transparency
-        ax_slider = plt.axes([0.25, 0.1, 0.5, 0.03])  # Position [left, bottom, width, height]
-        slider = Slider(ax_slider, "Alpha", 0, 1.0, valinit=0.5)  # Slider range from 0.1 to 1.0
-
-        # Update function for the slider
-        def update_alpha(val):
-            for line in pop_plot_objects:
-                line.set_alpha(slider.val)  # Update the alpha value of the line
-            fig.canvas.draw_idle()  # Redraw the figure
-
-        # Connect the slider to the update function
-        slider.on_changed(update_alpha)
-
-
-        # Add labels, title, and legend
-        ax1.set_xlabel("Percent of ORIGINAL population Extinguished (Dynamically deleting the newest extrema)")
-        ax1.set_ylabel("Percent of Population Left")
-
-        ax2 = ax1.twinx()
-
-        label_ax = plt.axes([0.85, 0.6, 0.10, 0.05])  # [left, bottom, width, height]
-        coord_ax = plt.axes([0.85, 0.5, 0.10, 0.05])
-
-
-        label_box = TextBox(label_ax, 'Highlight Line:', initial='')
-        coord_box = TextBox(coord_ax, 'Probe X:', initial='')
-
-
-        lines = []
-
-        for key in by_species_antarctica:
-            line, = ax2.plot(antarctica_x[:len(by_species_antarctica[key])], by_species_antarctica[key], color = ANTARCTICA_COLOR, label = key, alpha = 0.3, picker = 2)
-            lines.append(line)
-
-
-        for key in by_species_arctic:
-            line, = ax2.plot(arctic_x[:len(by_species_arctic[key])], by_species_arctic[key], color = ARCTIC_COLOR, label = key, alpha = 0.3, picker = 2)
-            lines.append(line)
-         
-        #Straight from ChatGPT:
-        # Store original line widths and states
-        original_lws = {line: line.get_linewidth() for line in lines}
-        original_colors = {line: line.get_color() for line in lines}
-        active_lines = {line: False for line in lines}  # Track toggled state
-
-        # Annotations per line
-        annotations = {}
-        probe_annots = []
+        for type_ in types:
     
-        def toggle_line_by_click(event):
-            line = event.artist
-            if line in lines:
-                x = event.mouseevent.xdata
-                y = event.mouseevent.ydata
-                toggle_line(line, x, y)
-
-        def toggle_line(line, x=None, y=None):
-            active_lines[line] = not active_lines[line]
-
-            if active_lines[line]:
-                line.set_linewidth(2)
-                line.set_alpha(1)
-                if original_colors[line] == ANTARCTICA_COLOR:
-                    line.set_color(ANTARCTICA_DARK)  # for antarctica
-                else:
-                    line.set_color(ARCTIC_DARK)  # for arctic
-                line.set_zorder(10)
-
-                # Determine new arrow base point
-                anchor_point = (x, y) if x is not None and y is not None else (line.get_xdata()[0], line.get_ydata()[0])
-
-                # Remove previous annotation if it exists (to update xy)
-                if line in annotations:
-                    annotations[line].remove()
-
-                annot = ax2.annotate(
-                    line.get_label(),
-                    xy=anchor_point,
-                    xytext=(30, 30),
-                    textcoords="offset points",
-                    bbox=dict(boxstyle="round", fc="w"),
-                    arrowprops=dict(arrowstyle="->", shrinkA=0, shrinkB=0, relpos=(0, 0)),
-                    fontsize=10,
-                )
-                annotations[line] = annot
-                annotations[line].set_picker(True)
-                annotations[line].draggable(True)
-
-            else:
-                line.set_linewidth(original_lws[line])
-                line.set_alpha(0.3)
-                line.set_color(original_colors[line])
-                line.set_zorder(1)
-                if line in annotations:
-                    annotations[line].set_visible(False)
-
-            fig.canvas.draw_idle()
-        
-
-        def submit_text(label_input):
-            label_input = label_input.strip()
-            for line in lines:
-                if line.get_label().lower() == label_input.lower():
-                    toggle_line(line)
-                    break
-
-        vertical_line = None
-
-        def submit_probe(x_input):
-            global vertical_line
-
-            
-            try:
-                x_val = float(x_input.strip())
-            except ValueError:
-                print("Invalid x value")
-                return
-
-            # Clear previous annotations
-            for annot in probe_annots:
-                annot.remove()
-            probe_annots.clear()
-
-            if vertical_line:
-                vertical_line.remove()
-            
-            closest_index = []
-            closest_index.append(min(range(len(arctic_x)), key= lambda i: abs(arctic_x[i] - x_val)))
-            closest_index.append(min(range(len(antarctica_x)), key= lambda i: abs(antarctica_x[i] - x_val)))
-            
-            to_post = (None, None, None)
-
-            if abs(arctic_x[closest_index[0]] - x_val) < abs(antarctica_x[closest_index[1]] - x_val):
-                if arctic_pop_list[closest_index[0]]:
-                    to_post = ("Arctic", arctic_pop_list[closest_index[0]][0], arctic_x[closest_index[0]] )
-                else:
-                    to_post = ("Arctic", arctic_pop_list[closest_index[0]], arctic_x[closest_index[0]] )
-
-            else:
-                if antarctica_pop_list[closest_index[1]]:
-                    to_post = ("Antarctica", antarctica_pop_list[closest_index[1]][0], antarctica_x[closest_index[1]])
-                else:
-                    to_post = ("Antarctica", antarctica_pop_list[closest_index[1]], antarctica_x[closest_index[1]])
-            # Loop over each line to find closest x point
-            
-            if to_post[0] == "Arctic":
-                vertical_line = ax2.axvline(x=to_post[2], color=ARCTIC_COLOR, linestyle=':', alpha = 1, linewidth = 0.75)
-            else:
-                vertical_line = ax2.axvline(x=to_post[2], color=ANTARCTICA_COLOR, linestyle=':', alpha = 1, linewidth = 0.75)
-
-            y_top = ax2.get_ylim()[1]
-            spacing = (y_top - ax2.get_ylim()[0]) * 0.05
-            
-            y_pos = y_top - spacing
-            annot = ax2.annotate(
-                f"{to_post[0]}: {to_post[1]}",
-                xy=(to_post[2], y_pos),
-                xytext=(5, 0),
-                textcoords="offset points",
-                fontsize=9,
-                bbox=dict(boxstyle="round", fc="white"),
-                ha='left'
-            )
-            probe_annots.append(annot)
-
-            fig.canvas.draw_idle()
-
-        fig.canvas.mpl_connect("pick_event", toggle_line_by_click)
-        label_box.on_submit(submit_text)
-        coord_box.on_submit(submit_probe)
-
-
-        ax2.set_ylabel("KSI of remaining species")
-
-
-        ax1.set_title(f"Dynamic Extinction vs Resultant Population using {metric} from {type_}", loc = "center")
-        
-        handles, labels = ax1.get_legend_handles_labels()
-        
-        ax1.legend(handles, labels, loc = "upper right")
-        plt.grid(True)
-
-        # Show the plot
-        plt.show()
-        figure_count += 1
-
-
-
-
-
-
-
-
-
-
-
-
-"""
-#13. Static Extinctions:
-# KSI/Trophic Level are NOT recomputed between iterations
-#Rather, a preset percent batch of the initial KSI/Trophic rankings are re-forcibly extinguished each pass
-
-for type_ in types:
-    for metric in metrics:
-
-        max_delta = 0
-        prev_popped = []
-        popped = []
-        #Antarctica
-        antarctica_collapse = 0
-        temp_g = antarctica.copy()
-        antarctica_x = list(range(antarctica.vcount()))
-        antarctica_y = []
-
-        by_species_antarctica = {}
-        for name in antarctica.vs["name"]:
-            by_species_antarctica[name] = []
-        #init values
-
-        antarctica_pop_list = []
-
-
-        for i in antarctica_x:
-
-            ksi_indexer(temp_g)
-            for j in range(temp_g.vcount()):
-                by_species_antarctica[temp_g.vs[j]["name"]].append(temp_g.vs[j]["ksi"])
-
-            components = temp_g.components(mode="weak")
-            if len(components) > 1 and antarctica_collapse == 0 and all(x > 1 for x in sorted(components.sizes(), reverse=True)[0:2]):
-                antarctica_collapse = i
-            antarctica_y.append(temp_g.vcount())
-
-            if len(antarctica_y) > 1:
-                antarctica_pop_list.append(list(set(popped).difference(set(prev_popped))))
-                if antarctica_y[-2] - antarctica_y[-1] > max_delta:
-                    antarctica_mark = (set(popped).difference(set(prev_popped)), i - 1) #does this record the right point idk
-                    max_delta = antarctica_y[-2] - antarctica_y[-1]
-            prev_popped = popped.copy()
-            temp_g, popped = extinction_simulation(antarctica, type_ = type_, metric=metric, percent=i/antarctica.vcount() * 100, threshold = threshold)
-
-        antarctica_x = [x / antarctica.vcount() * 100 for x in antarctica_x]
-        antarctica_y = [y / antarctica.vcount() * 100 for y in antarctica_y]
-        
-        antarctica_pop_list.append("END")
-
-        #Arctic
-        max_delta = 0
-        prev_popped = []
-        popped = []
-
-        arctic_collapse = 0
-        temp_g = arctic.copy()
-        arctic_x = list(range(arctic.vcount()))
-
-        arctic_y = []
-
-        by_species_arctic = {}
-        for name in arctic.vs["name"]:
-            by_species_arctic[name] = []
-
-        arctic_pop_list = []
-
-        for i in arctic_x:
-
-            ksi_indexer(temp_g)
-            for j in range(temp_g.vcount()):
-                by_species_arctic[temp_g.vs[j]["name"]].append(temp_g.vs[j]["ksi"])
-
-            components = temp_g.components(mode="weak")
-            if len(components) > 1 and arctic_collapse == 0 and all(x > 1 for x in sorted(components.sizes(), reverse=True)[0:2]):
-                arctic_collapse = i
-            arctic_y.append(temp_g.vcount())
-
-            if len(arctic_y) > 1:
-                arctic_pop_list.append(list(set(popped).difference(set(prev_popped))))
-                if arctic_y[-2] - arctic_y[-1] > max_delta:
-                    arctic_mark = (set(popped).difference(set(prev_popped)), i - 1) #does this record the right point idk
-                    max_delta = arctic_y[-2] - arctic_y[-1]
-
-            prev_popped = popped.copy()
-            temp_g, popped = extinction_simulation(arctic, type_ = type_, metric=metric, percent=i/arctic.vcount() * 100, threshold = threshold)
-            
-        arctic_y = [y / arctic.vcount() * 100 for y in arctic_y]
-        arctic_x = [x / arctic.vcount() * 100 for x in arctic_x]
-        arctic_pop_list.append("END")
-        
-
-
-
-        fig, ax1 = plt.subplots()
-        plt.subplots_adjust(bottom=0.25, right = 0.725)
-
-        pop_plot_objects = []
-
-
-        pop_plot_objects.append(ax1.plot([0, max(antarctica_x)], [max(antarctica_y), 0], label="Reference", color="gray", linewidth = 1, linestyle = "--", alpha = 0.5)[0])  # Line plot for y1
-
-        pop_plot_objects.append(ax1.scatter(arctic_x[arctic_mark[1]], arctic_y[arctic_mark[1]], label = arctic_mark[0], color = ARCTIC_COLOR, s = 100))
-        pop_plot_objects.append(ax1.scatter(antarctica_x[antarctica_mark[1]], antarctica_y[antarctica_mark[1]], label = antarctica_mark[0], color = ANTARCTICA_COLOR, s = 100))
-
-        #Baseline y = 100 - x reference line
-
-
-        pop_plot_objects.append(ax1.plot(antarctica_x, antarctica_y, label="Antarctic Extinction", color=ANTARCTICA_COLOR, linewidth = 4)[0])  # Line plot for y1
-        if antarctica_collapse != 0:
-            pop_plot_objects.append(ax1.axhline(antarctica_y[antarctica_collapse], color=ANTARCTICA_COLOR, linestyle='dotted', linewidth=2, label="Antarctic Collapse"))
-
-        pop_plot_objects.append(ax1.plot(arctic_x, arctic_y, label="Arctic Extinction", color=ARCTIC_COLOR, linewidth = 4)[0])  # Line plot for y2
-        if arctic_collapse != 0:
-            pop_plot_objects.append(ax1.axhline(arctic_y[arctic_collapse], color=ARCTIC_COLOR, linestyle='dotted', linewidth=2, label="Arctic Collapse"))
-        #Darker Colors:
-        #Arctic: #0f8aa6
-        #Antarctica: #020ca1
-
-        #Controlling transparency of plots of population
-
-        # Add a slider for transparency
-        ax_slider = plt.axes([0.25, 0.1, 0.5, 0.03])  # Position [left, bottom, width, height]
-        slider = Slider(ax_slider, "Alpha", 0, 1.0, valinit=0.5)  # Slider range from 0.1 to 1.0
-
-        # Update function for the slider
-        def update_alpha(val):
-            for line in pop_plot_objects:
-                line.set_alpha(slider.val)  # Update the alpha value of the line
-            fig.canvas.draw_idle()  # Redraw the figure
-
-        # Connect the slider to the update function
-        slider.on_changed(update_alpha)
-
-
-        # Add labels, title, and legend
-        ax1.set_xlabel("Percent of TOTAL population Extinguished (Statically deleting the newest extrema)")
-        ax1.set_ylabel("Percent of Population Left")
-
-        ax2 = ax1.twinx()
-
-        label_ax = plt.axes([0.85, 0.6, 0.10, 0.05])  # [left, bottom, width, height]
-        coord_ax = plt.axes([0.85, 0.5, 0.10, 0.05])
-
-
-        label_box = TextBox(label_ax, 'Highlight Line:', initial='')
-        coord_box = TextBox(coord_ax, 'Probe X:', initial='')
-
-
-        lines = []
-
-        for key in by_species_antarctica:
-            line, = ax2.plot(antarctica_x[:len(by_species_antarctica[key])], by_species_antarctica[key], color = ANTARCTICA_COLOR, label = key, alpha = 0.3, picker = 2)
-            lines.append(line)
-
-
-        for key in by_species_arctic:
-            line, = ax2.plot(arctic_x[:len(by_species_arctic[key])], by_species_arctic[key], color = ARCTIC_COLOR, label = key, alpha = 0.3, picker = 2)
-            lines.append(line)
-        
-        #Straight from ChatGPT:
-
-        # Store original line widths and states
-        original_lws = {line: line.get_linewidth() for line in lines}
-        original_colors = {line: line.get_color() for line in lines}
-        active_lines = {line: False for line in lines}  # Track toggled state
-
-        # Annotations per line
-        annotations = {}
-        probe_annots = []
+            #Antarctica
+            antarctica_collapse = 0 #initializing collapse point
+            temp_g = antarctica.copy()
+            antarctica_x = list(range(antarctica.vcount()))
+            antarctica_y = []
+            max_delta = 0 #to track the max delta between points
     
-        def toggle_line_by_click(event):
-            line = event.artist
-            if line in lines:
-                x = event.mouseevent.xdata
-                y = event.mouseevent.ydata
-                toggle_line(line, x, y)
+            #All species KSI for each extinction
+            by_species_antarctica = {}
+            for name in antarctica.vs["name"]:
+                by_species_antarctica[name] = []
+    
+            #Ordered list of what animals are being extinguished under each iteration
+            antarctica_pop_list = []
+    
+            for i in antarctica_x:
+                #Updating KSI values
+                trophic_level_indexer(temp_g)
+                ksi_indexer(temp_g)
+                for j in range(temp_g.vcount()):
+                    by_species_antarctica[temp_g.vs[j]["name"]].append(temp_g.vs[j]["ksi"])
+    
+    
+                #Checking if collapsed
+                components = temp_g.components(mode="weak")
+                if len(components) > 1 and antarctica_collapse == 0 and all(x > 1 for x in sorted(components.sizes(), reverse=True)[0:2]):
+                    antarctica_collapse = i
                 
-        def toggle_line(line, x=None, y=None):
-            active_lines[line] = not active_lines[line]
+                #Adding the current population to the y axis
+                antarctica_y.append(temp_g.vcount())
+    
+                #Tracking largest delta between points
+                if len(antarctica_y) > 1:
+                    antarctica_pop_list.append(popped)
+                    if antarctica_y[-2] - antarctica_y[-1] > max_delta:
+                        antarctica_mark = (popped, i - 1) #does this record the right point idk
+                        max_delta = antarctica_y[-2] - antarctica_y[-1]
+    
+                #Dynamic extinction simulation
+                temp_g, popped = extinction_simulation(temp_g, type_ = type_, metric=metric, percent=0, threshold=threshold)
+                
+            antarctica_pop_list.append("END")
+            antarctica_counts = antarctica_y.copy()
+            antarctica_r50 = robustness_50(antarctica_counts, antarctica.vcount())
+            robustness_results["Antarctica"][f"{metric}_{type_}_thr{int(threshold*100)}"] = antarctica_r50
+            print(f"Antarctica R50 ({metric} {type_}, threshold {threshold}): {antarctica_r50}")
+            antarctica_x = [x / antarctica.vcount() * 100 for x in antarctica_x]
+            antarctica_y = [y / antarctica.vcount() * 100 for y in antarctica_counts]
+    
+    
+    
+            #Arctic
+            max_delta = 0 
+            arctic_collapse = 0
+            temp_g = arctic.copy()
+            arctic_x = list(range(arctic.vcount()))
+            arctic_y = []
+            
+            by_species_arctic = {}
+            for name in arctic.vs["name"]:
+                by_species_arctic[name] = []
+    
+            arctic_pop_list = []
+    
+            for i in arctic_x:
+    
+                ksi_indexer(temp_g)
+                trophic_level_indexer(temp_g)
+                for j in range(temp_g.vcount()):
+                    by_species_arctic[temp_g.vs[j]["name"]].append(temp_g.vs[j]["ksi"])
+    
+    
+                components = temp_g.components(mode="weak")
+                if len(components) > 1 and arctic_collapse == 0 and all(x > 1 for x in sorted(components.sizes(), reverse=True)[0:2]):
+                    arctic_collapse = i
+                arctic_y.append(temp_g.vcount())
+    
+                if len(arctic_y) > 1:
+                    arctic_pop_list.append(popped)
+                    if arctic_y[-2] - arctic_y[-1] > max_delta:
+                        max_delta = arctic_y[-2] - arctic_y[-1]
+                        arctic_mark = (popped, i - 1) #does this record the right point idk
+                        
+    
+                temp_g, popped = extinction_simulation(temp_g, type_ = type_, metric=metric, percent=0, threshold = threshold)
+    
+            arctic_counts = arctic_y.copy()
+            arctic_r50 = robustness_50(arctic_counts, arctic.vcount())
+            robustness_results["Arctic"][f"{metric}_{type_}_thr{int(threshold*100)}"] = arctic_r50
+            print(f"Arctic R50 ({metric} {type_}, threshold {threshold}): {arctic_r50}")
+            arctic_x = [x / arctic.vcount() * 100 for x in arctic_x]
+            arctic_y = [y / arctic.vcount() * 100 for y in arctic_counts]
 
-            if active_lines[line]:
-                line.set_linewidth(2)
-                line.set_alpha(1)
-                if original_colors[line] == ANTARCTICA_COLOR:
-                    line.set_color("#2c306e")  # for antarctica
+            arctic_pop_list.append("END")
+    
+    
+            #Plotting the results
+            fig, ax1 = plt.subplots()
+            plt.subplots_adjust(bottom=0.25, right = 0.725)
+    
+            pop_plot_objects = []
+    
+            #Baseline y = 100 - x reference line
+            pop_plot_objects.append(ax1.plot([0, max(antarctica_x)], [max(antarctica_y), 0], label="Reference", color="gray", linewidth = 1, linestyle = "--", alpha = 0.5)[0])  # Line plot for y1
+            
+            #Points at which max population delta occurs
+            pop_plot_objects.append(ax1.scatter(arctic_x[arctic_mark[1]], arctic_y[arctic_mark[1]], label = arctic_mark[0], color = ARCTIC_COLOR, s = 100))
+            pop_plot_objects.append(ax1.scatter(antarctica_x[antarctica_mark[1]], antarctica_y[antarctica_mark[1]], label = antarctica_mark[0], color = ANTARCTICA_COLOR, s = 100))
+    
+            #Plotting the extinction lines
+            pop_plot_objects.append(ax1.plot(antarctica_x, antarctica_y, label="Antarctic Extinction", color=ANTARCTICA_COLOR, linewidth = 4)[0])  # Line plot for y1
+            if antarctica_collapse != 0:
+                pop_plot_objects.append(ax1.axhline(antarctica_y[antarctica_collapse], color=ANTARCTICA_COLOR, linestyle='dotted', linewidth=2, label="Antarctic Collapse"))
+    
+            pop_plot_objects.append(ax1.plot(arctic_x, arctic_y, label="Arctic Extinction", color=ARCTIC_COLOR, linewidth = 4)[0])  # Line plot for y2
+            if arctic_collapse != 0:
+                pop_plot_objects.append(ax1.axhline(arctic_y[arctic_collapse], color=ARCTIC_COLOR, linestyle='dotted', linewidth=2, label="Arctic Collapse"))
+            #Darker Colors:
+            #Arctic: #0f8aa6
+            #Antarctica: #020ca1
+    
+            #Controlling transparency of plots of population
+    
+            # Add a slider for transparency
+            ax_slider = plt.axes([0.25, 0.1, 0.5, 0.03])  # Position [left, bottom, width, height]
+            slider = Slider(ax_slider, "Alpha", 0, 1.0, valinit=0.5)  # Slider range from 0.1 to 1.0
+    
+            # Update function for the slider
+            def update_alpha(val):
+                for line in pop_plot_objects:
+                    line.set_alpha(slider.val)  # Update the alpha value of the line
+                fig.canvas.draw_idle()  # Redraw the figure
+    
+            # Connect the slider to the update function
+            slider.on_changed(update_alpha)
+    
+    
+            # Add labels, title, and legend
+            ax1.set_xlabel("Percent of ORIGINAL population Extinguished (Dynamically deleting the newest extrema)")
+            ax1.set_ylabel("Percent of Population Left")
+    
+            ax2 = ax1.twinx()
+    
+            label_ax = plt.axes([0.85, 0.6, 0.10, 0.05])  # [left, bottom, width, height]
+            coord_ax = plt.axes([0.85, 0.5, 0.10, 0.05])
+    
+    
+            label_box = TextBox(label_ax, 'Highlight Line:', initial='')
+            coord_box = TextBox(coord_ax, 'Probe X:', initial='')
+    
+    
+            lines = []
+    
+            for key in by_species_antarctica:
+                line, = ax2.plot(antarctica_x[:len(by_species_antarctica[key])], by_species_antarctica[key], color = ANTARCTICA_COLOR, label = key, alpha = 0.3, picker = 2)
+                lines.append(line)
+    
+    
+            for key in by_species_arctic:
+                line, = ax2.plot(arctic_x[:len(by_species_arctic[key])], by_species_arctic[key], color = ARCTIC_COLOR, label = key, alpha = 0.3, picker = 2)
+                lines.append(line)
+             
+            #Straight from ChatGPT:
+            # Store original line widths and states
+            original_lws = {line: line.get_linewidth() for line in lines}
+            original_colors = {line: line.get_color() for line in lines}
+            active_lines = {line: False for line in lines}  # Track toggled state
+    
+            # Annotations per line
+            annotations = {}
+            probe_annots = []
+        
+            def toggle_line_by_click(event):
+                line = event.artist
+                if line in lines:
+                    x = event.mouseevent.xdata
+                    y = event.mouseevent.ydata
+                    toggle_line(line, x, y)
+    
+            def toggle_line(line, x=None, y=None):
+                active_lines[line] = not active_lines[line]
+    
+                if active_lines[line]:
+                    line.set_linewidth(2)
+                    line.set_alpha(1)
+                    if original_colors[line] == ANTARCTICA_COLOR:
+                        line.set_color(ANTARCTICA_DARK)  # for antarctica
+                    else:
+                        line.set_color(ARCTIC_DARK)  # for arctic
+                    line.set_zorder(10)
+    
+                    # Determine new arrow base point
+                    anchor_point = (x, y) if x is not None and y is not None else (line.get_xdata()[0], line.get_ydata()[0])
+    
+                    # Remove previous annotation if it exists (to update xy)
+                    if line in annotations:
+                        annotations[line].remove()
+    
+                    annot = ax2.annotate(
+                        line.get_label(),
+                        xy=anchor_point,
+                        xytext=(30, 30),
+                        textcoords="offset points",
+                        bbox=dict(boxstyle="round", fc="w"),
+                        arrowprops=dict(arrowstyle="->", shrinkA=0, shrinkB=0, relpos=(0, 0)),
+                        fontsize=10,
+                    )
+                    annotations[line] = annot
+                    annotations[line].set_picker(True)
+                    annotations[line].draggable(True)
+    
                 else:
-                    line.set_color("#185866")  # for arctic
-                line.set_zorder(10)
-
-                # Determine new arrow base point
-                anchor_point = (x, y) if x is not None and y is not None else (line.get_xdata()[0], line.get_ydata()[0])
-
-                # Remove previous annotation if it exists (to update xy)
-                if line in annotations:
-                    annotations[line].remove()
-
+                    line.set_linewidth(original_lws[line])
+                    line.set_alpha(0.3)
+                    line.set_color(original_colors[line])
+                    line.set_zorder(1)
+                    if line in annotations:
+                        annotations[line].set_visible(False)
+    
+                fig.canvas.draw_idle()
+            
+    
+            def submit_text(label_input):
+                label_input = label_input.strip()
+                for line in lines:
+                    if line.get_label().lower() == label_input.lower():
+                        toggle_line(line)
+                        break
+    
+            vertical_line = None
+    
+            def submit_probe(x_input):
+                global vertical_line
+    
+                
+                try:
+                    x_val = float(x_input.strip())
+                except ValueError:
+                    print("Invalid x value")
+                    return
+    
+                # Clear previous annotations
+                for annot in probe_annots:
+                    annot.remove()
+                probe_annots.clear()
+    
+                if vertical_line:
+                    vertical_line.remove()
+                
+                closest_index = []
+                closest_index.append(min(range(len(arctic_x)), key= lambda i: abs(arctic_x[i] - x_val)))
+                closest_index.append(min(range(len(antarctica_x)), key= lambda i: abs(antarctica_x[i] - x_val)))
+                
+                to_post = (None, None, None)
+    
+                if abs(arctic_x[closest_index[0]] - x_val) < abs(antarctica_x[closest_index[1]] - x_val):
+                    if arctic_pop_list[closest_index[0]]:
+                        to_post = ("Arctic", arctic_pop_list[closest_index[0]][0], arctic_x[closest_index[0]] )
+                    else:
+                        to_post = ("Arctic", arctic_pop_list[closest_index[0]], arctic_x[closest_index[0]] )
+    
+                else:
+                    if antarctica_pop_list[closest_index[1]]:
+                        to_post = ("Antarctica", antarctica_pop_list[closest_index[1]][0], antarctica_x[closest_index[1]])
+                    else:
+                        to_post = ("Antarctica", antarctica_pop_list[closest_index[1]], antarctica_x[closest_index[1]])
+                # Loop over each line to find closest x point
+                
+                if to_post[0] == "Arctic":
+                    vertical_line = ax2.axvline(x=to_post[2], color=ARCTIC_COLOR, linestyle=':', alpha = 1, linewidth = 0.75)
+                else:
+                    vertical_line = ax2.axvline(x=to_post[2], color=ANTARCTICA_COLOR, linestyle=':', alpha = 1, linewidth = 0.75)
+    
+                y_top = ax2.get_ylim()[1]
+                spacing = (y_top - ax2.get_ylim()[0]) * 0.05
+                
+                y_pos = y_top - spacing
                 annot = ax2.annotate(
-                    line.get_label(),
-                    xy=anchor_point,
-                    xytext=(30, 30),
+                    f"{to_post[0]}: {to_post[1]}",
+                    xy=(to_post[2], y_pos),
+                    xytext=(5, 0),
                     textcoords="offset points",
-                    bbox=dict(boxstyle="round", fc="w"),
-                    arrowprops=dict(arrowstyle="->", shrinkA=0, shrinkB=0, relpos=(0, 0)),
-                    fontsize=10,
+                    fontsize=9,
+                    bbox=dict(boxstyle="round", fc="white"),
+                    ha='left'
                 )
-                annotations[line] = annot
-                annotations[line].set_picker(True)
-                annotations[line].draggable(True)
-
-            else:
-                line.set_linewidth(original_lws[line])
-                line.set_alpha(0.3)
-                line.set_color(original_colors[line])
-                line.set_zorder(1)
-                if line in annotations:
-                    annotations[line].set_visible(False)
-
-            fig.canvas.draw_idle()
-        
-        def submit_text(label_input):
-            label_input = label_input.strip()
-            for line in lines:
-                if line.get_label().lower() == label_input.lower():
-                    toggle_line(line)
-                    break
-
-        vertical_line = None
-
-        def submit_probe(x_input):
-            global vertical_line
-
+                probe_annots.append(annot)
+    
+                fig.canvas.draw_idle()
+    
+            fig.canvas.mpl_connect("pick_event", toggle_line_by_click)
+            label_box.on_submit(submit_text)
+            coord_box.on_submit(submit_probe)
+    
+    
+            ax2.set_ylabel("KSI of remaining species")
+    
+    
+            ax1.set_title(f"Dynamic Extinction vs Resultant Population using {metric} from {type_}", loc = "center")
             
-            try:
-                x_val = float(x_input.strip())
-            except ValueError:
-                print("Invalid x value")
-                return
-
-            # Clear previous annotations
-            for annot in probe_annots:
-                annot.remove()
-            probe_annots.clear()
-
-            if vertical_line:
-                vertical_line.remove()
+            handles, labels = ax1.get_legend_handles_labels()
             
-            closest_index = []
-            closest_index.append(min(range(len(arctic_x)), key= lambda i: abs(arctic_x[i] - x_val)))
-            closest_index.append(min(range(len(antarctica_x)), key= lambda i: abs(antarctica_x[i] - x_val)))
-            
-            to_post = (None, None, None)
+            ax1.legend(handles, labels, loc = "upper right")
+            plt.grid(True)
+    
+            # Show the plot
+            plt.show()
+            figure_count += 1
 
-            if abs(arctic_x[closest_index[0]] - x_val) < abs(antarctica_x[closest_index[1]] - x_val):
-                if arctic_pop_list[closest_index[0]]:
-                    to_post = ("Arctic", arctic_pop_list[closest_index[0]][0], arctic_x[closest_index[0]] )
-                else:
-                    to_post = ("Arctic", arctic_pop_list[closest_index[0]], arctic_x[closest_index[0]] )
-
-            else:
-                if antarctica_pop_list[closest_index[1]]:
-                    to_post = ("Antarctica", antarctica_pop_list[closest_index[1]][0], antarctica_x[closest_index[1]])
-                else:
-                    to_post = ("Antarctica", antarctica_pop_list[closest_index[1]], antarctica_x[closest_index[1]])
-            # Loop over each line to find closest x point
-            
-            if to_post[0] == "Arctic":
-                vertical_line = ax2.axvline(x=to_post[2], color=ARCTIC_COLOR, linestyle=':', alpha = 1, linewidth = 0.75)
-            else:
-                vertical_line = ax2.axvline(x=to_post[2], color=ANTARCTICA_COLOR, linestyle=':', alpha = 1, linewidth = 0.75)
-
-            y_top = ax2.get_ylim()[1]
-            spacing = (y_top - ax2.get_ylim()[0]) * 0.05
-            
-            y_pos = y_top - spacing
-            annot = ax2.annotate(
-                f"{to_post[0]}: {to_post[1]}",
-                xy=(to_post[2], y_pos),
-                xytext=(5, 0),
-                textcoords="offset points",
-                fontsize=9,
-                bbox=dict(boxstyle="round", fc="white"),
-                ha='left'
-            )
-            probe_annots.append(annot)
-
-            fig.canvas.draw_idle()
-
-        fig.canvas.mpl_connect("pick_event", toggle_line_by_click)
-        label_box.on_submit(submit_text)
-        coord_box.on_submit(submit_probe)
+print("Robustness-50 Results:")
+for web, results in robustness_results.items():
+    for key, value in results.items():
+        print(f"{web} - {key}: {value}")
 
 
-        ax2.set_ylabel("KSI of remaining species")
-
-        #Points with the biggest deltas
 
 
-        ax1.set_title(f"Fig #{figure_count}: Static Extinction vs Resultant Population using {metric} from {type_}", loc = "center")
-        
-        handles, labels = ax1.get_legend_handles_labels()
-        
-        ax1.legend(handles, labels, loc = "upper right")
-        plt.grid(True)
 
-        # Show the plot
-        plt.show()
-        figure_count += 1
-"""
+
+
+
+
+
+
+
+
         
 
 

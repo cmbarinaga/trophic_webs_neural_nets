@@ -984,3 +984,30 @@ def read_dict_from_txt(file_path):
             key, value = line.strip().split(": ", 1)  # Split on ": " to separate key and value
             dictionary[key] = value  # Use eval to handle non-string values (e.g., lists, numbers)
     return dictionary
+
+
+def robustness_50(population_history, initial_count):
+    """Calculate Robustness-50 index for an extinction simulation.
+
+    Parameters
+    ----------
+    population_history : list of int
+        Remaining species counts after each primary extinction step. The first
+        value should correspond to the initial number of species.
+    initial_count : int
+        Number of species at the beginning of the simulation.
+
+    Returns
+    -------
+    float
+        The Robustness-50 index defined as the proportion of primary
+        extinctions required to drive the community to 50% of its original
+        size. A value of 0.5 indicates no secondary extinctions.
+    """
+
+    half = initial_count * 0.5
+    for i, remaining in enumerate(population_history):
+        if remaining <= half:
+            return i / initial_count
+    # Population never dropped below half
+    return len(population_history) / initial_count
